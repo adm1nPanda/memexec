@@ -18,6 +18,9 @@
     <ClCompile Include="memexec.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MemoryModule.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cxxopts.hpp">
@@ -26,5 +29,16 @@
     <ClInclude Include="HTTPRequest.hpp">
       <Filter>Resource Files</Filter>
     </ClInclude>
+    <ClInclude Include="MemoryModule.h">
+      <Filter>Resource Files</Filter>
+    </ClInclude>
+    <ClInclude Include="resource1.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="memexec.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>
